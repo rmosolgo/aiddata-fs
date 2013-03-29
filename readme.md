@@ -30,8 +30,11 @@ and may be retrieved with three parameters: _namespace_, _project id_, and _docu
 ```
 
 - Amazon S3 for storage:
+
 ```Ruby
+
 	require 'aws-sdk' 
+
 
 ```
 
@@ -62,6 +65,8 @@ Config constants for later:
 	NOT_FOUND = "{ \"error\" : \" not found \" }"
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
+	NOT_DELETED = "{ \"error\" : \" not deleted\" }"
+	SUCCESS = "{ \"success\" : \"success\" }"
 	FILESYSTEM_ROOT = "files"	
 
 ```
@@ -113,28 +118,7 @@ projects, or "mbdc" for media-based data collection projects.
 	end
 ```
 
-```Ruby
 
-
-	def locate(location, contents=nil)
-		# location: string OR obj that responds to to_json
-		# contents: array with objs that respond to :to_json
-		if location.respond_to? :to_json
-			location = location.to_json
-		else
-			location = "\"#{location}\""
-		end
-
-		vals = ["\"location\" : #{location}"]
-		
-		if contents
-			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
-		end
-
-		"{ #{ vals.join ", "}}"
-	end
-
-```
 
 ### Project
 
@@ -228,6 +212,31 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 
 ## API
 
+JSON API is powered by the models' `:to_json` method, which allows really simple navigation.
+
+```Ruby
+
+
+	def locate(location, contents=nil)
+		# location: string OR obj that responds to to_json
+		# contents: array with objs that respond to :to_json
+		if location.respond_to? :to_json
+			location = location.to_json
+		else
+			location = "\"#{location}\""
+		end
+
+		vals = ["\"location\" : #{location}"]
+		
+		if contents
+			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
+		end
+
+		"{ #{ vals.join ", "}}"
+	end
+
+```
+
 ### Namespace
 
 __URL:__ `/:namespace`
@@ -283,7 +292,15 @@ Create it by posting its `project_id` to its namespace:
 		
 		protected!
 		
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		
+		if n.destroy
+			SUCCESS
+		else
+			NOT_DELETED
+		end
+
+
 	end
 
 
@@ -305,8 +322,13 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 
 		protected!
-
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		p = Project.first_or_create(id: params[:project], namespace: n)
+		if p.destroy
+			SUCCESS
+		else
+			NOT_DELETED
+		end	
 	end
 
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project" do
@@ -351,7 +373,15 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 ```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		if d = Document.get(params[:document])
-			send_file d.path, filename: d.name
+			require 'open-uri'
+			p "Getting file from #{d.url}"
+			data = open(d.url) {|io| io.read}
+			
+			p "Sending file"
+			
+			content_type 'application/octet-stream'
+			attachment d.name
+			data
 		else
 			NOT_FOUND
 		end
@@ -368,7 +398,20 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 		
 		protected!
 
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		p = Project.first_or_create(id: params[:project], namespace: n)
+		if d = Document.get(params[:document])
+
+			l = Link.first_or_create(project: p, document: d)
+
+			if l.destroy
+				SUCCESS
+			else
+				NOT_DELETED
+			end
+		else
+			NOT_FOUND
+		end
 	end
 
 
@@ -382,7 +425,7 @@ When a file is loaded, its md5 is generated and tested against existing md5s.
 
 ```Ruby
 
-		def find_or_store(tempfile, filename)
+	def find_or_store(tempfile, filename)
 		# tempfile is a Tempfile
 		# filename is its human-readable filename
 
@@ -512,4 +555,6 @@ Documents can also be downloaded directly via `/document/:id`.
 		attachment d.name
 		data
 	end
+
+
 ```

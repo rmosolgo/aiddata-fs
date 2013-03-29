@@ -17,6 +17,8 @@
 	NOT_FOUND = "{ \"error\" : \" not found \" }"
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
+	NOT_DELETED = "{ \"error\" : \" not deleted\" }"
+	SUCCESS = "{ \"success\" : \"success\" }"
 	FILESYSTEM_ROOT = "files"	
 	class Namespace
 		include DataMapper::Resource
@@ -41,21 +43,6 @@
 	def authorized?
 		@auth ||=  Rack::Auth::Basic::Request.new(request.env)
 		@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
-	end
-	def locate(location, contents=nil)
-		# location: string OR obj that responds to to_json
-		# contents: array with objs that respond to :to_json
-		if location.respond_to? :to_json
-			location = location.to_json
-		else
-			location = "\"#{location}\""
-		end
-		vals = ["\"location\" : #{location}"]
-		
-		if contents
-			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
-		end
-		"{ #{ vals.join ", "}}"
 	end
 	class Project
 		include DataMapper::Resource
@@ -114,6 +101,21 @@
 	get "/#{FILESYSTEM_ROOT}" do
 		locate "root", Namespace.all
 	end
+	def locate(location, contents=nil)
+		# location: string OR obj that responds to to_json
+		# contents: array with objs that respond to :to_json
+		if location.respond_to? :to_json
+			location = location.to_json
+		else
+			location = "\"#{location}\""
+		end
+		vals = ["\"location\" : #{location}"]
+		
+		if contents
+			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
+		end
+		"{ #{ vals.join ", "}}"
+	end
 	post "/#{FILESYSTEM_ROOT}" do
 		
 		protected!
@@ -148,7 +150,13 @@
 		
 		protected!
 		
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		
+		if n.destroy
+			SUCCESS
+		else
+			NOT_DELETED
+		end
 	end
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		n = Namespace.first_or_create(name: params[:namespace])
@@ -157,7 +165,13 @@
 	end
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		protected!
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		p = Project.first_or_create(id: params[:project], namespace: n)
+		if p.destroy
+			SUCCESS
+		else
+			NOT_DELETED
+		end	
 	end
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
@@ -187,7 +201,15 @@
 	end
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		if d = Document.get(params[:document])
-			send_file d.path, filename: d.name
+			require 'open-uri'
+			p "Getting file from #{d.url}"
+			data = open(d.url) {|io| io.read}
+			
+			p "Sending file"
+			
+			content_type 'application/octet-stream'
+			attachment d.name
+			data
 		else
 			NOT_FOUND
 		end
@@ -200,9 +222,20 @@
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
 		protected!
-		NOT_IMPLEMENTED
+		n = Namespace.first_or_create(name: params[:namespace])
+		p = Project.first_or_create(id: params[:project], namespace: n)
+		if d = Document.get(params[:document])
+			l = Link.first_or_create(project: p, document: d)
+			if l.destroy
+				SUCCESS
+			else
+				NOT_DELETED
+			end
+		else
+			NOT_FOUND
+		end
 	end
-		def find_or_store(tempfile, filename)
+	def find_or_store(tempfile, filename)
 		# tempfile is a Tempfile
 		# filename is its human-readable filename
 		p "Find or Store?"
