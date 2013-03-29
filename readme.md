@@ -3,24 +3,41 @@
 Document storage accessible by simple, RESTful url. Documents are stored along with their projects, 
 and may be retrieved with three parameters: _namespace_, _project id_, and _document id_. For example, fs.aiddata.org/mbdc/1703/2843
 
+## Setup
+
+### Runs on...
+
+- Sinatra framework:
+
 ```Ruby
 	require 'rubygems'
 	require 'bundler/setup'
 	require 'sinatra'
+```
+
+- Postgres, via DataMapper gem:
+```Ruby
 	require 'data_mapper'
 	require 'dm-postgres-adapter'
 	require 'pg'
+```
+
+- Ruby utilities: Thin server, HAML templates, Barista for Coffeescript
+```Ruby
 	require 'thin'
 	require 'haml'
 	require 'barista'
+```
+
+- Amazon S3 for storage:
+```Ruby
 	require 'aws-sdk' 
-	p "Gems loaded."
 
 ```
 
-## Connection info
+### Connection info
 
-Set authentication and connection info in the Environment.
+Set authentication and connection info in the Environment. They are not written down -- you have to know them.
 
 ```Ruby
 	AUTH_PAIR = [ENV['AIDDATA_FS_USERNAME'], ENV['AIDDATA_FS_PASSWORD']]
@@ -30,7 +47,14 @@ Set authentication and connection info in the Environment.
 	AWS_ACCESS_KEY_ID =  ENV['AWS_ACCESS_KEY_ID']
 	AWS_ACCESS_SECRET_KEY =  ENV['AWS_SECRET_KEY']
 
+
+	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
+
 ```
+
+### Constants
+
+Config constants for later:
 
 ```Ruby
 
@@ -38,9 +62,7 @@ Set authentication and connection info in the Environment.
 	NOT_FOUND = "{ \"error\" : \" not found \" }"
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
-	FILESYSTEM_ROOT = "files"
-
-	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
+	FILESYSTEM_ROOT = "files"	
 
 ```
 
@@ -49,7 +71,9 @@ Set authentication and connection info in the Environment.
 
 ### Namespace
 
-Namespace denotes the collection to which a given project belongs. For example, namespaces might be "aiddata" for aiddata.org, "malawi" for Malawi-AMP projects, or "mbdc" for media-based data collection projects. 
+Namespace denotes the collection to which a given project belongs. 
+For example, namespaces might be "aiddata" for aiddata.org, "malawi" for Malawi-AMP 
+projects, or "mbdc" for media-based data collection projects. 
 
 ```Ruby
 	class Namespace
@@ -74,99 +98,40 @@ Namespace denotes the collection to which a given project belongs. For example, 
 
 ```Ruby
 
-	helpers do
 
-		def protected!
-			unless authorized?
-				p "Unauthorized request."
-				response['WWW-Authenticate'] = %(Basic realm="AidDataFS")
-				throw(:halt, [401, "Not authorized\n"])
-			end
+	def protected!
+		unless authorized?
+			p "Unauthorized request."
+			response['WWW-Authenticate'] = %(Basic realm="AidDataFS")
+			throw(:halt, [401, "Not authorized\n"])
+		end
+	end
+
+	def authorized?
+		@auth ||=  Rack::Auth::Basic::Request.new(request.env)
+		@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
+	end
+```
+
+```Ruby
+
+
+	def locate(location, contents=nil)
+		# location: string OR obj that responds to to_json
+		# contents: array with objs that respond to :to_json
+		if location.respond_to? :to_json
+			location = location.to_json
+		else
+			location = "\"#{location}\""
 		end
 
-		def authorized?
-			@auth ||=  Rack::Auth::Basic::Request.new(request.env)
-			@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
+		vals = ["\"location\" : #{location}"]
+		
+		if contents
+			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
 		end
 
-		def find_or_store(tempfile, filename)
-			# tempfile is a Tempfile
-			# filename is its human-readable filename
-
-			p "Find or Store?"
-			
-			require 'digest/md5'
-
-			# just in case
-			tempfile.rewind
-			
-			this_md5 = Digest::MD5.hexdigest(tempfile.read)
-			
-			if d = Document.first(md5: this_md5)
-				p "File already found"
-			
-			else
-
-				path = "https://s3.amazonaws.com/#{BUCKET_NAME}/#{this_md5}"
-				
-				p "Creating the file #{this_md5}"
-
-				# For my purposes, MD5 is the AWS filename.
-				upload(tempfile, this_md5)
-
-				p "Making Document object"
-				d = Document.new(
-					url: path, 
-					name: filename, 
-					md5: this_md5,
-					size_in_kb: ((tempfile.size)/1024).round
-					)
-				if !d.save
-					p d.errors
-				end
-			end
-
-			d
-		end
-			
-		def upload(tempfile, filename)
-			# tempfile is a Tempfile
-			# filename is the name it should be stored as (in my case, MD5)
-
-			s3 = AWS::S3.new(
-				:access_key_id => AWS_ACCESS_KEY_ID, 
-				:secret_access_key => AWS_ACCESS_SECRET_KEY 
-			)
-			p "Uploading file to S3 #{BUCKET_NAME}"
-
-			# just in case 
-			tempfile.rewind
-			obj = s3.buckets[BUCKET_NAME].objects[filename].write(tempfile.read)
-
-			# Oh heck, make sure people can download this stuff.
-
-			obj.acl = :public_read
-
-			filename
-		end
-
-		def locate(location, contents=nil)
-			# location: string OR obj that responds to to_json
-			# contents: array with objs that respond to :to_json
-			if location.respond_to? :to_json
-				location = location.to_json
-			else
-				location = "\"#{location}\""
-			end
-
-			vals = ["\"location\" : #{location}"]
-			
-			if contents
-				vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
-			end
-
-			"{ #{ vals.join ", "}}"
-		end
+		"{ #{ vals.join ", "}}"
 	end
 
 ```
@@ -250,13 +215,9 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 
 ```Ruby
 	DataMapper.finalize.auto_upgrade!
-	p "Models created"
 
-	get "/home" do
-		haml :home
-	end
 
-	get "/browse" do
+	get "/" do
 		haml :browse
 	end
 
@@ -417,17 +378,80 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 
 ### Documents aren't stored redundantly
 
-When a file is loaded, its checksum is generated and tested against existing checksums.
+When a file is loaded, its md5 is generated and tested against existing md5s.
 
 ```Ruby
 
-	# See helpers#find_or_store
+		def find_or_store(tempfile, filename)
+		# tempfile is a Tempfile
+		# filename is its human-readable filename
 
+		p "Find or Store?"
+		
+		require 'digest/md5'
+
+		# just in case
+		tempfile.rewind
+		
+		this_md5 = Digest::MD5.hexdigest(tempfile.read)
+		
+		if d = Document.first(md5: this_md5)
+			p "File already found"
+		
+		else
+
+			path = "https://s3.amazonaws.com/#{BUCKET_NAME}/#{this_md5}"
+			
+			p "Creating the file #{this_md5}"
+
+			# For my purposes, MD5 is the AWS filename.
+			upload(tempfile, this_md5)
+
+			p "Making Document object"
+			d = Document.new(
+				url: path, 
+				name: filename, 
+				md5: this_md5,
+				size_in_kb: ((tempfile.size)/1024).round
+				)
+			if !d.save
+				p d.errors
+			end
+		end
+
+		d
+	end
+		
 ```
+
 
 #### If false
 
 Then the file is stored on the server and a link is created.
+
+```Ruby
+
+	def upload(tempfile, filename)
+		# tempfile is a Tempfile
+		# filename is the name it should be stored as (in my case, MD5)
+
+		s3 = AWS::S3.new(
+			:access_key_id => AWS_ACCESS_KEY_ID, 
+			:secret_access_key => AWS_ACCESS_SECRET_KEY 
+		)
+		p "Uploading file to S3 #{BUCKET_NAME}"
+
+		# just in case 
+		tempfile.rewind
+		obj = s3.buckets[BUCKET_NAME].objects[filename].write(tempfile.read)
+
+		# Oh heck, make sure people can download this stuff.
+
+		obj.acl = :public_read
+
+		filename
+	end
+```
 
 
 #### If true
@@ -488,7 +512,4 @@ Documents can also be downloaded directly via `/document/:id`.
 		attachment d.name
 		data
 	end
-
-#### Versions 
-
-Documents are stored with version. `/document/:id` returns the most recent version.
+```

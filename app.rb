@@ -8,17 +8,16 @@
 	require 'haml'
 	require 'barista'
 	require 'aws-sdk' 
-	p "Gems loaded."
 	AUTH_PAIR = [ENV['AIDDATA_FS_USERNAME'], ENV['AIDDATA_FS_PASSWORD']]
 	BUCKET_NAME = 'aiddata-fs'
 	AWS_ACCESS_KEY_ID =  ENV['AWS_ACCESS_KEY_ID']
 	AWS_ACCESS_SECRET_KEY =  ENV['AWS_SECRET_KEY']
+	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
 	NOT_SAVED = "{ \"error\" : \" not saved \" }"
 	NOT_FOUND = "{ \"error\" : \" not found \" }"
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
-	FILESYSTEM_ROOT = "files"
-	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
+	FILESYSTEM_ROOT = "files"	
 	class Namespace
 		include DataMapper::Resource
 		property :name, String, key: true
@@ -32,82 +31,31 @@
 				}"
 		end
 	end
-	helpers do
-		def protected!
-			unless authorized?
-				p "Unauthorized request."
-				response['WWW-Authenticate'] = %(Basic realm="AidDataFS")
-				throw(:halt, [401, "Not authorized\n"])
-			end
+	def protected!
+		unless authorized?
+			p "Unauthorized request."
+			response['WWW-Authenticate'] = %(Basic realm="AidDataFS")
+			throw(:halt, [401, "Not authorized\n"])
 		end
-		def authorized?
-			@auth ||=  Rack::Auth::Basic::Request.new(request.env)
-			@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
+	end
+	def authorized?
+		@auth ||=  Rack::Auth::Basic::Request.new(request.env)
+		@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
+	end
+	def locate(location, contents=nil)
+		# location: string OR obj that responds to to_json
+		# contents: array with objs that respond to :to_json
+		if location.respond_to? :to_json
+			location = location.to_json
+		else
+			location = "\"#{location}\""
 		end
-		def find_or_store(tempfile, filename)
-			# tempfile is a Tempfile
-			# filename is its human-readable filename
-			p "Find or Store?"
-			
-			require 'digest/md5'
-			# just in case
-			tempfile.rewind
-			
-			this_md5 = Digest::MD5.hexdigest(tempfile.read)
-			
-			if d = Document.first(md5: this_md5)
-				p "File already found"
-			
-			else
-				path = "https://s3.amazonaws.com/#{BUCKET_NAME}/#{this_md5}"
-				
-				p "Creating the file #{this_md5}"
-				# For my purposes, MD5 is the AWS filename.
-				upload(tempfile, this_md5)
-				p "Making Document object"
-				d = Document.new(
-					url: path, 
-					name: filename, 
-					md5: this_md5,
-					size_in_kb: ((tempfile.size)/1024).round
-					)
-				if !d.save
-					p d.errors
-				end
-			end
-			d
+		vals = ["\"location\" : #{location}"]
+		
+		if contents
+			vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
 		end
-			
-		def upload(tempfile, filename)
-			# tempfile is a Tempfile
-			# filename is the name it should be stored as (in my case, MD5)
-			s3 = AWS::S3.new(
-				:access_key_id => AWS_ACCESS_KEY_ID, 
-				:secret_access_key => AWS_ACCESS_SECRET_KEY 
-			)
-			p "Uploading file to S3 #{BUCKET_NAME}"
-			# just in case 
-			tempfile.rewind
-			obj = s3.buckets[BUCKET_NAME].objects[filename].write(tempfile.read)
-			# Oh heck, make sure people can download this stuff.
-			obj.acl = :public_read
-			filename
-		end
-		def locate(location, contents=nil)
-			# location: string OR obj that responds to to_json
-			# contents: array with objs that respond to :to_json
-			if location.respond_to? :to_json
-				location = location.to_json
-			else
-				location = "\"#{location}\""
-			end
-			vals = ["\"location\" : #{location}"]
-			
-			if contents
-				vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
-			end
-			"{ #{ vals.join ", "}}"
-		end
+		"{ #{ vals.join ", "}}"
 	end
 	class Project
 		include DataMapper::Resource
@@ -160,11 +108,7 @@
 		end
 	end
 	DataMapper.finalize.auto_upgrade!
-	p "Models created"
-	get "/home" do
-		haml :home
-	end
-	get "/browse" do
+	get "/" do
 		haml :browse
 	end
 	get "/#{FILESYSTEM_ROOT}" do
@@ -258,7 +202,55 @@
 		protected!
 		NOT_IMPLEMENTED
 	end
-	# See helpers#find_or_store
+		def find_or_store(tempfile, filename)
+		# tempfile is a Tempfile
+		# filename is its human-readable filename
+		p "Find or Store?"
+		
+		require 'digest/md5'
+		# just in case
+		tempfile.rewind
+		
+		this_md5 = Digest::MD5.hexdigest(tempfile.read)
+		
+		if d = Document.first(md5: this_md5)
+			p "File already found"
+		
+		else
+			path = "https://s3.amazonaws.com/#{BUCKET_NAME}/#{this_md5}"
+			
+			p "Creating the file #{this_md5}"
+			# For my purposes, MD5 is the AWS filename.
+			upload(tempfile, this_md5)
+			p "Making Document object"
+			d = Document.new(
+				url: path, 
+				name: filename, 
+				md5: this_md5,
+				size_in_kb: ((tempfile.size)/1024).round
+				)
+			if !d.save
+				p d.errors
+			end
+		end
+		d
+	end
+		
+	def upload(tempfile, filename)
+		# tempfile is a Tempfile
+		# filename is the name it should be stored as (in my case, MD5)
+		s3 = AWS::S3.new(
+			:access_key_id => AWS_ACCESS_KEY_ID, 
+			:secret_access_key => AWS_ACCESS_SECRET_KEY 
+		)
+		p "Uploading file to S3 #{BUCKET_NAME}"
+		# just in case 
+		tempfile.rewind
+		obj = s3.buckets[BUCKET_NAME].objects[filename].write(tempfile.read)
+		# Oh heck, make sure people can download this stuff.
+		obj.acl = :public_read
+		filename
+	end
 	get "/links" do
 		protected!
 		"[ #{Link.all.map{ |l| l.to_json}.join(", ") } ]"
