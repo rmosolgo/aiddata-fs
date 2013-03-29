@@ -1,0 +1,74 @@
+%html
+	%head 
+		%link{href: "//netdna.bootstrapcdn.com/bootswatch/2.3.1/spruce/bootstrap.min.css", rel:"stylesheet" }
+		%script{src: "jquery.js"}
+		:css 
+			li {
+				margin-left:40px;
+			}
+	%body
+		.container
+			%h1.row.page-header 
+				AidDataFS
+				%small Project-level document storage
+			
+			%p.row To upload, enter a path, then choose a file. Authentication required.
+			%p.row
+				Upload to 
+				%b Root/
+				%input{ onkeyup: "$('#upload').attr('action', 'files/'+ this.value);" }
+			%form#upload.row{ action: 'files/mbdc/10', method: "post", :enctype=>"multipart/form-data"}
+				%input{type: "file", name: "file"}
+				%input{type: "submit"}
+
+			#root-root 
+				%i.icon-folder-close
+				%a{href: "#", onclick: "App.navigate_to('root', 'root')"}
+					Root
+				%ul.children.unstyled
+
+
+	:coffeescript
+
+		@App = @App || {}
+
+		App.current_namespace = ''
+
+		App.navigate_to = (type, key) ->
+			$('#'+type+'-'+key).children('.icon-folder-close').removeClass('icon-folder-close').addClass('icon-folder-open')
+			if type is 'document'
+				url = 'documents/' + key
+			else if type is 'project'
+				url = 'files/' + App.current_namespace + '/' + key
+			else if type is 'namespace'
+				App.current_namespace = key
+				url = 'files/' + key
+			else if type is 'root'
+				url = 'files'
+
+			if url?
+				console.log url
+				$.get(url, (data) -> print_data_from(type, key, data) )
+
+			print_data_from = (type, key, data) ->
+				
+				data = $.parseJSON(data)
+				console.log(data)
+
+				target = $('#'+type+'-'+key+' .children')
+ 
+				menu = ("<li id='"+d.type+"-"+d.key+"'>
+							<i class='"+ (if d.type is 'document' then 'icon-file' else 'icon-folder-close') + "'></i>
+							<a href='"+(if d.type is 'document' then 'documents/'+d.key else "#") + "' onclick=\"App.navigate_to('"+d.type+"','"+d.key+"')\">" + 
+							d.name + 
+							"</a>
+							<ul class='children unstyled'></ul>
+						</li>" for d in data.contents).join("") 
+
+				# console.log menu
+				target.html menu
+
+		App.init = () ->
+			App.navigate_to('root', 'root')
+
+		App.init()

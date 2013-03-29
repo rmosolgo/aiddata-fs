@@ -1,9 +1,3 @@
-# AidDataFS
-
-Document storage accessible by simple, RESTful url. Documents are stored along with their projects, 
-and may be retrieved with three parameters: _namespace_, _project id_, and _document id_. For example, fs.aiddata.org/mbdc/1703/2843
-
-```Ruby
 	require 'rubygems'
 	require 'bundler/setup'
 	require 'sinatra'
@@ -15,49 +9,20 @@ and may be retrieved with three parameters: _namespace_, _project id_, and _docu
 	require 'barista'
 	require 'aws-sdk' 
 	p "Gems loaded."
-
-```
-
-## Connection info
-
-Set authentication and connection info in the Environment.
-
-```Ruby
 	AUTH_PAIR = [ENV['AIDDATA_FS_USERNAME'], ENV['AIDDATA_FS_PASSWORD']]
-
 	BUCKET_NAME = 'aiddata-fs'
-
 	AWS_ACCESS_KEY_ID =  ENV['AWS_ACCESS_KEY_ID']
 	AWS_ACCESS_SECRET_KEY =  ENV['AWS_SECRET_KEY']
-
-```
-
-```Ruby
-
 	NOT_SAVED = "{ \"error\" : \" not saved \" }"
 	NOT_FOUND = "{ \"error\" : \" not found \" }"
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
 	FILESYSTEM_ROOT = "files"
-
 	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
-
-```
-
-
-## Models
-
-### Namespace
-
-Namespace denotes the collection to which a given project belongs. For example, namespaces might be "aiddata" for aiddata.org, "malawi" for Malawi-AMP projects, or "mbdc" for media-based data collection projects. 
-
-```Ruby
 	class Namespace
 		include DataMapper::Resource
 		property :name, String, key: true
-
 		has n, :projects
-
 		def to_json
 			json = "{ 
 					\"type\": \"namespace\", 
@@ -67,15 +32,7 @@ Namespace denotes the collection to which a given project belongs. For example, 
 				}"
 		end
 	end
-```
-#### Permissions
-
- Any user me `GET` a resource, but any idempotent request must pass authentication (also known to AidData FS).
-
-```Ruby
-
 	helpers do
-
 		def protected!
 			unless authorized?
 				p "Unauthorized request."
@@ -83,20 +40,16 @@ Namespace denotes the collection to which a given project belongs. For example, 
 				throw(:halt, [401, "Not authorized\n"])
 			end
 		end
-
 		def authorized?
 			@auth ||=  Rack::Auth::Basic::Request.new(request.env)
 			@auth.provided? && @auth.basic? && @auth.credentials && @auth.credentials == AUTH_PAIR
 		end
-
 		def find_or_store(tempfile, filename)
 			# tempfile is a Tempfile
 			# filename is its human-readable filename
-
 			p "Find or Store?"
 			
 			require 'digest/md5'
-
 			# just in case
 			tempfile.rewind
 			
@@ -106,14 +59,11 @@ Namespace denotes the collection to which a given project belongs. For example, 
 				p "File already found"
 			
 			else
-
 				path = "https://s3.amazonaws.com/#{BUCKET_NAME}/#{this_md5}"
 				
 				p "Creating the file #{this_md5}"
-
 				# For my purposes, MD5 is the AWS filename.
 				upload(tempfile, this_md5)
-
 				p "Making Document object"
 				d = Document.new(
 					url: path, 
@@ -125,31 +75,24 @@ Namespace denotes the collection to which a given project belongs. For example, 
 					p d.errors
 				end
 			end
-
 			d
 		end
 			
 		def upload(tempfile, filename)
 			# tempfile is a Tempfile
 			# filename is the name it should be stored as (in my case, MD5)
-
 			s3 = AWS::S3.new(
 				:access_key_id => AWS_ACCESS_KEY_ID, 
 				:secret_access_key => AWS_ACCESS_SECRET_KEY 
 			)
 			p "Uploading file to S3 #{BUCKET_NAME}"
-
 			# just in case 
 			tempfile.rewind
 			obj = s3.buckets[BUCKET_NAME].objects[filename].write(tempfile.read)
-
 			# Oh heck, make sure people can download this stuff.
-
 			obj.acl = :public_read
-
 			filename
 		end
-
 		def locate(location, contents=nil)
 			# location: string OR obj that responds to to_json
 			# contents: array with objs that respond to :to_json
@@ -158,33 +101,21 @@ Namespace denotes the collection to which a given project belongs. For example, 
 			else
 				location = "\"#{location}\""
 			end
-
 			vals = ["\"location\" : #{location}"]
 			
 			if contents
 				vals.push "\"contents\" : [#{contents.map{|c| c.to_json}.join ", "}]"
 			end
-
 			"{ #{ vals.join ", "}}"
 		end
 	end
-
-```
-
-### Project
-
-Project denotes the actual activity in the given namespace. It likely has an instance in a particular database or dataset, such as AidData.org or the Malawi geocoded dataset. 
-
-```Ruby
 	class Project
 		include DataMapper::Resource
 		property :id, String, key: true
 		property :namespace_name, String, key: true
-
 		belongs_to :namespace
 		has n, :links
 		has n, :documents, through: :links
-
 		def to_json
 			json = "{
 					\"type\": \"project\",
@@ -194,33 +125,21 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 					\"document_count\" : #{documents.count} }"
 		end
 	end
-```
-
-
-
-### Document
-
-```Ruby
 	class Link
 		include DataMapper::Resource
 		property :id, Serial
-
 		belongs_to :project
 		belongs_to :document
-
-
 		def to_json
 			# vv This is what matters! vv
 			document.to_json
 			#json = "{\"type\": \"link\", \"project_id\" :  \"#{project.id}\", \"document_id\" : #{document.pk} }"
 		end
 	end
-
 	class Document
 		include DataMapper::Resource
 		
 		require 'digest/md5'
-
 		property :pk, Serial 
 		# property :id, Integer #not really a pk, because doc can change versions.
 		property :md5, String
@@ -228,7 +147,6 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 		property :size_in_kb, Integer
 		property :type, Text, default: lambda { |r, p| File.extname(r.name).gsub(/\./, '')  }
 		property :name, Text
-
 		def to_json
 			json = "{ 
 					\"type\" : \"document\",
@@ -241,40 +159,17 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 				}"
 		end
 	end
-
-
-
-```
-
-
-
-```Ruby
 	DataMapper.finalize.auto_upgrade!
 	p "Models created"
-
 	get "/home" do
 		haml :home
 	end
-
 	get "/browse" do
 		haml :browse
 	end
-
 	get "/#{FILESYSTEM_ROOT}" do
 		locate "root", Namespace.all
 	end
-```
-
-## API
-
-### Namespace
-
-__URL:__ `/:namespace`
-
-- `POST` a new `name` to `/` to create a new namespace.
-- `GET`ting the namespace path (eg `/mbdc`) responds with a project manifest.
-
-```Ruby
 	post "/#{FILESYSTEM_ROOT}" do
 		
 		protected!
@@ -287,71 +182,42 @@ __URL:__ `/:namespace`
 			NOT_SAVED
 		end
 	end	
-
 	get "/#{FILESYSTEM_ROOT}/:namespace" do
-
 		if n = Namespace.first_or_create(name: params[:namespace])
 			locate n.name, n.projects
 		else
 			NOT_FOUND
 		end
 	end
-```
-
-### Projects
-
-Create it by posting its `project_id` to its namespace:
-
-```Ruby
 	post "/#{FILESYSTEM_ROOT}/:namespace" do
-
 		protected! 
-
 		p = Project.new(id: params[:project_id])
 		n = Namespace.first_or_create(name: params[:namespace])
 		n.projects << p
-
 		if n.save
 			p.to_json
 		else
 			NOT_SAVED
 		end
 	end
-
 	delete "/#{FILESYSTEM_ROOT}/:namespace" do
 		
 		protected!
 		
 		NOT_IMPLEMENTED
 	end
-
-
-```
-
-It has a RESTful URL such as `/malawi/8071234` which responds to requests:
-
-- `POST`ing a file adds that file to the project.
-- `DELETE`ing a file destroys that link
-- `GET` returns a document manifest.
-
-```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		n = Namespace.first_or_create(name: params[:namespace])
 		p = Project.first_or_create(id: params[:project], namespace: n)
 		locate p.id, p.documents
 	end
-
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
-
 		protected!
-
 		NOT_IMPLEMENTED
 	end
-
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
 		protected!
-
 		if params[:file]
 			p "Receiving file #{params[:file]}"
 			
@@ -363,7 +229,6 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 			end
 			
 			p "tempfile is #{tempfile.class}"
-
 			if d = find_or_store(tempfile, name)
 				p "Making Link object"
 				l = Link.new(document: d, project: p)
@@ -376,18 +241,6 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 			NOT_RECEIVED
 		end
 	end
-
-
-```
-
-### Documents
-Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
-
-- GET returns the file
-- POST/PUT replaces the file with the new file
-- `DELETE` removes the file
-
-```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		if d = Document.get(params[:document])
 			send_file d.path, filename: d.name
@@ -395,87 +248,28 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 			NOT_FOUND
 		end
 	end
-
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
 		protected!
-
 		NOT_IMPLEMENTED
 	end
-
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
 		protected!
-
 		NOT_IMPLEMENTED
 	end
-
-
-```
-
-## Documents
-
-### Documents aren't stored redundantly
-
-When a file is loaded, its checksum is generated and tested against existing checksums.
-
-```Ruby
-
 	# See helpers#find_or_store
-
-```
-
-#### If false
-
-Then the file is stored on the server and a link is created.
-
-
-#### If true
-
-Then a link is created, registering that document with the requested project.
-
-### Links
-```Ruby
 	get "/links" do
-
 		protected!
-
 		"[ #{Link.all.map{ |l| l.to_json}.join(", ") } ]"
 	end
-```
-
-A given document may be present in multiple links:
-
-```json
-{ "namespace" : "malawi", "project_id" : 8071234, "document_id" : 9983 },
-{ "namespace" : "mbdc", "project_id" : 1703, "document_id" : 9983 }
-```
-
-And a project will have many links:
-
-```json
-{ "namespace" : "malawi", "project_id" : 8071234, "document_id" : 9983 }
-...
-{ "namespace" : "malawi", "project_id" : 8071234, "document_id" : 3214 }
-```
-
-### The documents themselves are served purely by ID
-
-But the `/:namespace/:project/:document` API provides a logical, stable, implementation-independent interface to the files.
-
-Documents can also be downloaded directly via `/document/:id`.
-```Ruby
-
 	get "/documents" do
 		
 		protected!
-
 		"[
 			#{Document.all.map{|d| d.to_json}.join ", "} 
 		]"
-
 	end
-
 	get "/documents/:pk" do
 		require 'open-uri'
 		d = Document.get(params[:pk])
@@ -488,7 +282,3 @@ Documents can also be downloaded directly via `/document/:id`.
 		attachment d.name
 		data
 	end
-
-#### Versions 
-
-Documents are stored with version. `/document/:id` returns the most recent version.
