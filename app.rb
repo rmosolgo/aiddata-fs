@@ -174,7 +174,7 @@
 	end
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
-		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project], params[:namespace]))
 			locate p.id, p.documents
 		else
 			NOT_FOUND

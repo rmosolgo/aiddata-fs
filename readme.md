@@ -334,7 +334,7 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 ```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
-		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project], params[:namespace]))
 			locate p.id, p.documents
 		else
 			NOT_FOUND
