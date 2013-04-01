@@ -182,7 +182,7 @@
 	end
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		protected!
-		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project]))
+		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project], params[:namespace]))
 		
 			if  p.destroy
 				SUCCESS
@@ -246,12 +246,14 @@
 	end
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
+		p "Delete request /#{FILESYSTEM_ROOT}/#{params[:namespace]}/#{params[:project]}/#{params[:document]}"
 		protected!
-		if n = Namespace.get(params[:namespace]) && 
-			p = Project.get(params[:project], params[:namespace]) && 
-			d = Document.get(params[:document]) 
-		
+		if (n = Namespace.get(params[:namespace])) && 
+			(p = Project.get(params[:project], params[:namespace])) && 
+			(d = Document.get(params[:document]) )
+			puts [n.to_json, p.to_json, d.to_json]
 			l = Link.first(project: p, document: d)
+			puts l
 			if l.destroy
 				SUCCESS
 			else
