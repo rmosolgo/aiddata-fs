@@ -18,8 +18,10 @@
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
 	NOT_DELETED = "{ \"error\" : \" not deleted\" }"
+	FILE_TOO_BIG =  "{ \"error\" : \"this file is too large!\" }"
 	SUCCESS = "{ \"success\" : \"success\" }"
-	FILESYSTEM_ROOT = "files"	
+	FILESYSTEM_ROOT = "files"
+	MAX_FILE_SIZE = 10485760 # in bytes
 	class Namespace
 		include DataMapper::Resource
 		property :name, String, key: true
@@ -65,10 +67,15 @@
 		property :id, Serial
 		belongs_to :project
 		belongs_to :document
+		def link_json
+			json = "{\"type\": \"link\", 
+					\"project_id\" :  \"#{project.id}\", 
+					\"document_id\" : #{document.pk}, 
+					\"document\" : \"#{document.to_json}\" }"
+		end
 		def to_json
 			# vv This is what matters! vv
 			document.to_json
-			#json = "{\"type\": \"link\", \"project_id\" :  \"#{project.id}\", \"document_id\" : #{document.pk} }"
 		end
 	end
 	class Document
@@ -129,7 +136,7 @@
 		end
 	end	
 	get "/#{FILESYSTEM_ROOT}/:namespace" do
-		if n = Namespace.first_or_create(name: params[:namespace])
+		if n = Namespace.get(params[:namespace])
 			locate n.name, n.projects
 		else
 			NOT_FOUND
@@ -137,20 +144,27 @@
 	end
 	post "/#{FILESYSTEM_ROOT}/:namespace" do
 		protected! 
-		p = Project.new(id: params[:project_id])
-		n = Namespace.first_or_create(name: params[:namespace])
-		n.projects << p
-		if n.save
-			p.to_json
+		
+		
+		if n = Namespace.get(params[:namespace])
+			if p = Project.new(id: params[:project_id])
+				if (n.projects << p) && n.save
+					p.to_json
+				else
+					NOT_SAVED
+				end
+			else
+				NOT_SAVED
+			end
 		else
-			NOT_SAVED
+			NOT_FOUND
 		end
 	end
 	delete "/#{FILESYSTEM_ROOT}/:namespace" do
 		
 		protected!
 		
-		n = Namespace.first_or_create(name: params[:namespace])
+		n = Namespace.get(params[:namespace])
 		
 		if n.destroy
 			SUCCESS
@@ -159,44 +173,55 @@
 		end
 	end
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		locate p.id, p.documents
+		
+		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+			locate p.id, p.documents
+		else
+			NOT_FOUND
+		end
 	end
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		protected!
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		if p.destroy
-			SUCCESS
+		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project]))
+		
+			if  p.destroy
+				SUCCESS
+			else
+				NOT_DELETED
+			end	
 		else
-			NOT_DELETED
-		end	
+			NOT_FOUND
+		end
 	end
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
 		protected!
-		if params[:file]
-			p "Receiving file #{params[:file]}"
-			
-			n = Namespace.first_or_create(name: params[:namespace])
-			p = Project.first_or_create(id: params[:project], namespace: n)
-			
-			unless params[:file] && (tempfile = params[:file][:tempfile]) && (name = params[:file][:filename])
-				NOT_SAVED
-			end
-			
-			p "tempfile is #{tempfile.class}"
-			if d = find_or_store(tempfile, name)
-				p "Making Link object"
-				l = Link.new(document: d, project: p)
-				l.save
-				locate l
+		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+			if params[:file]
+				p "Receiving file #{params[:file]}"
+				
+				
+				unless params[:file] && (tempfile = params[:file][:tempfile]) && (name = params[:file][:filename])
+					NOT_SAVED
+				end
+				
+				if tempfile.size <= MAX_FILE_SIZE
+					if d = find_or_store(tempfile, name)
+						p "Making Link object"
+						l = Link.new(document: d, project: p)
+						l.save
+						locate l
+					else
+						NOT_SAVED
+					end
+				else
+					FILE_TOO_BIG
+				end
 			else
-				NOT_SAVED
+				NOT_RECEIVED
 			end
 		else
-			NOT_RECEIVED
+			NOT_FOUND
 		end
 	end
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
@@ -222,10 +247,11 @@
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
 		protected!
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		if d = Document.get(params[:document])
-			l = Link.first_or_create(project: p, document: d)
+		if n = Namespace.get(params[:namespace]) && 
+			p = Project.get(params[:project], params[:namespace]) && 
+			d = Document.get(params[:document]) 
+		
+			l = Link.first(project: p, document: d)
 			if l.destroy
 				SUCCESS
 			else
@@ -238,7 +264,7 @@
 	def find_or_store(tempfile, filename)
 		# tempfile is a Tempfile
 		# filename is its human-readable filename
-		p "Find or Store?"
+		# p "Find or Store?"
 		
 		require 'digest/md5'
 		# just in case
@@ -286,7 +312,7 @@
 	end
 	get "/links" do
 		protected!
-		"[ #{Link.all.map{ |l| l.to_json}.join(", ") } ]"
+		"[ #{Link.all.map{ |l| l.link_json}.join(", ") } ]"
 	end
 	get "/documents" do
 		
@@ -306,4 +332,8 @@
 		content_type 'application/octet-stream'
 		attachment d.name
 		data
+	end
+	delete "/documents/:pk" do
+		NOT_IMPLEMENTED
+		# This is on purpose -- delete links, not documents!
 	end

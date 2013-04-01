@@ -27,6 +27,7 @@ and may be retrieved with three parameters: _namespace_, _project id_, and _docu
 	require 'thin'
 	require 'haml'
 	require 'barista'
+
 ```
 
 - Amazon S3 for storage:
@@ -66,8 +67,11 @@ Config constants for later:
 	NOT_IMPLEMENTED = "{ \"error\" : \" not implemented\" }"
 	NOT_RECEIVED = "{ \"error\" : \" no file received\" }"
 	NOT_DELETED = "{ \"error\" : \" not deleted\" }"
+	FILE_TOO_BIG =  "{ \"error\" : \"this file is too large!\" }"
 	SUCCESS = "{ \"success\" : \"success\" }"
-	FILESYSTEM_ROOT = "files"	
+
+	FILESYSTEM_ROOT = "files"
+	MAX_FILE_SIZE = 10485760 # in bytes
 
 ```
 
@@ -157,11 +161,16 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 		belongs_to :project
 		belongs_to :document
 
+		def link_json
+			json = "{\"type\": \"link\", 
+					\"project_id\" :  \"#{project.id}\", 
+					\"document_id\" : #{document.pk}, 
+					\"document\" : \"#{document.to_json}\" }"
+		end
 
 		def to_json
 			# vv This is what matters! vv
 			document.to_json
-			#json = "{\"type\": \"link\", \"project_id\" :  \"#{project.id}\", \"document_id\" : #{document.pk} }"
 		end
 	end
 
@@ -260,7 +269,7 @@ __URL:__ `/:namespace`
 
 	get "/#{FILESYSTEM_ROOT}/:namespace" do
 
-		if n = Namespace.first_or_create(name: params[:namespace])
+		if n = Namespace.get(params[:namespace])
 			locate n.name, n.projects
 		else
 			NOT_FOUND
@@ -277,14 +286,24 @@ Create it by posting its `project_id` to its namespace:
 
 		protected! 
 
-		p = Project.new(id: params[:project_id])
-		n = Namespace.first_or_create(name: params[:namespace])
-		n.projects << p
+		
+		
+		if n = Namespace.get(params[:namespace])
 
-		if n.save
-			p.to_json
+			if p = Project.new(id: params[:project_id])
+
+				if (n.projects << p) && n.save
+					p.to_json
+				else
+					NOT_SAVED
+				end
+
+			else
+				NOT_SAVED
+			end
+
 		else
-			NOT_SAVED
+			NOT_FOUND
 		end
 	end
 
@@ -292,7 +311,7 @@ Create it by posting its `project_id` to its namespace:
 		
 		protected!
 		
-		n = Namespace.first_or_create(name: params[:namespace])
+		n = Namespace.get(params[:namespace])
 		
 		if n.destroy
 			SUCCESS
@@ -314,50 +333,69 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 
 ```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		locate p.id, p.documents
+		
+		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+			locate p.id, p.documents
+		else
+			NOT_FOUND
+		end
+
 	end
 
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 
 		protected!
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		if p.destroy
-			SUCCESS
+
+		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project], params[:namespace]))
+		
+			if  p.destroy
+				SUCCESS
+			else
+				NOT_DELETED
+			end	
 		else
-			NOT_DELETED
-		end	
+			NOT_FOUND
+		end
 	end
 
 	post "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
 		protected!
 
-		if params[:file]
-			p "Receiving file #{params[:file]}"
-			
-			n = Namespace.first_or_create(name: params[:namespace])
-			p = Project.first_or_create(id: params[:project], namespace: n)
-			
-			unless params[:file] && (tempfile = params[:file][:tempfile]) && (name = params[:file][:filename])
-				NOT_SAVED
-			end
-			
-			p "tempfile is #{tempfile.class}"
+		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
 
-			if d = find_or_store(tempfile, name)
-				p "Making Link object"
-				l = Link.new(document: d, project: p)
-				l.save
-				locate l
+			if params[:file]
+				p "Receiving file #{params[:file]}"
+				
+
+				
+				unless params[:file] && (tempfile = params[:file][:tempfile]) && (name = params[:file][:filename])
+					NOT_SAVED
+				end
+				
+				if tempfile.size <= MAX_FILE_SIZE
+
+					if d = find_or_store(tempfile, name)
+						p "Making Link object"
+						l = Link.new(document: d, project: p)
+						l.save
+						locate l
+					else
+						NOT_SAVED
+					end
+
+				else
+					FILE_TOO_BIG
+				end
+
 			else
-				NOT_SAVED
+				NOT_RECEIVED
 			end
+
 		else
-			NOT_RECEIVED
+			NOT_FOUND
 		end
+
 	end
 
 
@@ -396,22 +434,29 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
+		p "Delete request /#{FILESYSTEM_ROOT}/#{params[:namespace]}/#{params[:project]}/#{params[:document]}"
 		protected!
 
-		n = Namespace.first_or_create(name: params[:namespace])
-		p = Project.first_or_create(id: params[:project], namespace: n)
-		if d = Document.get(params[:document])
+		if (n = Namespace.get(params[:namespace])) && 
+			(p = Project.get(params[:project], params[:namespace])) && 
+			(d = Document.get(params[:document]) )
 
-			l = Link.first_or_create(project: p, document: d)
+			puts [n.to_json, p.to_json, d.to_json]
+
+			l = Link.first(project: p, document: d)
+
+			puts l
 
 			if l.destroy
 				SUCCESS
 			else
 				NOT_DELETED
 			end
+
 		else
 			NOT_FOUND
 		end
+
 	end
 
 
@@ -428,8 +473,7 @@ When a file is loaded, its md5 is generated and tested against existing md5s.
 	def find_or_store(tempfile, filename)
 		# tempfile is a Tempfile
 		# filename is its human-readable filename
-
-		p "Find or Store?"
+		# p "Find or Store?"
 		
 		require 'digest/md5'
 
@@ -507,7 +551,7 @@ Then a link is created, registering that document with the requested project.
 
 		protected!
 
-		"[ #{Link.all.map{ |l| l.to_json}.join(", ") } ]"
+		"[ #{Link.all.map{ |l| l.link_json}.join(", ") } ]"
 	end
 ```
 
@@ -554,6 +598,11 @@ Documents can also be downloaded directly via `/document/:id`.
 		content_type 'application/octet-stream'
 		attachment d.name
 		data
+	end
+
+	delete "/documents/:pk" do
+		NOT_IMPLEMENTED
+		# This is on purpose -- delete links, not documents!
 	end
 
 

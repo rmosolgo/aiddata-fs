@@ -2,10 +2,24 @@
 	%head 
 		%link{href: "//netdna.bootstrapcdn.com/bootswatch/2.3.1/spruce/bootstrap.min.css", rel:"stylesheet" }
 		%script{src: "jquery.js"}
-		:css 
+		%script{src: "finch.js"}
+		:css
 			li {
-				margin-left:40px;
+				margin-left: 40px;
 			}
+
+			.destroy-link {
+				visibility:hidden;
+			}
+
+			li:hover > .destroy-link {
+				visibility: visible;
+			}
+
+			a {
+				cursor:pointer;
+			}
+			
 	%body
 		.container
 			%h1.row.page-header 
@@ -21,9 +35,9 @@
 				%input{type: "file", name: "file"}
 				%input{type: "submit"}
 
-			#root-root 
+			#files 
 				%i.icon-folder-close
-				%a{href: "#", onclick: "App.navigate_to('root', 'root')"}
+				%a{href: "#", onclick: "App.navigate_to('files')"}
 					Root
 				%ul.children.unstyled
 
@@ -32,43 +46,84 @@
 
 		@App = @App || {}
 
+		@log = (args...) -> console.log a for a in args
 		App.current_namespace = ''
 
-		App.navigate_to = (type, key) ->
-			$('#'+type+'-'+key).children('.icon-folder-close').removeClass('icon-folder-close').addClass('icon-folder-open')
-			if type is 'document'
-				url = 'documents/' + key
-			else if type is 'project'
-				url = 'files/' + App.current_namespace + '/' + key
-			else if type is 'namespace'
-				App.current_namespace = key
-				url = 'files/' + key
-			else if type is 'root'
-				url = 'files'
+		App.navigate_to = (urllike_id) ->
+			url = urllike_id.replace(/--/g, '/')
+			Finch.navigate "/" + url
+			App.open(urllike_id)
 
-			if url?
-				console.log url
-				$.get(url, (data) -> print_data_from(type, key, data) )
 
-			print_data_from = (type, key, data) ->
-				
+
+		App.open = (urllike_id) ->
+			url = urllike_id.replace(/--/g, '/')
+			# naming convention -- an element's ID is the same as it's path, with -- instead of /
+			
+			# this_element is the <li>
+			this_element = $('#'+urllike_id)
+			log this_element
+			# get its children, if they're there, and close them.
+			this_element.children('.icon-folder-close').removeClass('icon-folder-close').addClass('icon-folder-open')
+
+			# if its a document...
+			if this_element.hasClass("document")
+				log "Getting a document"
+				window.open(url)
+			else
+				$.get(url, (data) -> print_data_from(urllike_id, data) )
+
+			
+			print_data_from = (urllike_id, data) ->
 				data = $.parseJSON(data)
-				console.log(data)
+				log "data", data
 
-				target = $('#'+type+'-'+key+' .children')
- 
-				menu = ("<li id='"+d.type+"-"+d.key+"'>
+				target = $('#'+urllike_id+' .children')
+				menu = ("<li id='"+urllike_id+"--"+d.key+"' class='" + d.type + "'>
 							<i class='"+ (if d.type is 'document' then 'icon-file' else 'icon-folder-close') + "'></i>
-							<a href='"+(if d.type is 'document' then 'documents/'+d.key else "#") + "' onclick=\"App.navigate_to('"+d.type+"','"+d.key+"')\">" + 
+							<a onclick=\"App.navigate_to('"+urllike_id+"--"+d.key+"')\">" + 
 							d.name + 
 							"</a>
+							<a class='destroy-link' onclick=\"App.destroy('"+urllike_id+"--"+d.key+"')\" >
+								<i class='icon-trash'></i>
+							</a>
 							<ul class='children unstyled'></ul>
 						</li>" for d in data.contents).join("") 
 
 				# console.log menu
 				target.html menu
 
-		App.init = () ->
-			App.navigate_to('root', 'root')
+		App.destroy = (urllike_id) ->
+			url = urllike_id.replace(/--/g, '/') 
+			if  confirm("Are you sure you want to delete this "+$('#'+urllike_id).attr("class") + "? ("+url+")")
+				$.ajax({
+					url: url,
+					type: "DELETE"
+					success: (data) ->
+						console.log data
+						data = $.parseJSON(data)
+						if !data["error"]
+							$('#'+urllike_id).remove()
+						else
+							alert("Uh oh -- this delete failed." +
+								"\nTry:\n\t- Removing all contents from folders \n\t- Making sure you're properly signed in." +
+								"\n\nError: "+data["error"] + 
+								"\nURL: "+url)
+					})
 
-		App.init()
+
+		Finch.route "/", () ->
+			Finch.navigate "/files"
+
+		Finch.route "/files", () ->
+			App.open("files")
+
+		Finch.route "[/files]/:namespace", (bindings) ->
+			App.open("files--"+bindings.namespace)
+
+		Finch.route "[/files/:namespace]/:project", (bindings) ->
+			App.open("files--"+bindings.namespace+"--"+bindings.project)
+
+
+
+		Finch.listen()
