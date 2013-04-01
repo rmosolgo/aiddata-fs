@@ -362,7 +362,9 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 		
 		protected!
 
-		if n = Namespace.get(params[:namespace]) && p = Project.get(params[:project], params[:namespace])
+		if (n = Namespace.get(params[:namespace])) && (p = Project.first_or_create(id: params[:project], namespace: n))
+
+			# puts p.to_json
 
 			if params[:file]
 				p "Receiving file #{params[:file]}"

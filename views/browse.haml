@@ -31,7 +31,7 @@
 				Upload to 
 				%b Root/
 				%input{ onkeyup: "$('#upload').attr('action', 'files/'+ this.value);" }
-			%form#upload.row{ action: 'files/mbdc/10', method: "post", :enctype=>"multipart/form-data"}
+			%form#upload.row{ action: '', method: "post", :enctype=>"multipart/form-data"}
 				%input{type: "file", name: "file"}
 				%input{type: "submit"}
 
