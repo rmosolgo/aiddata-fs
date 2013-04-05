@@ -76,7 +76,7 @@
 	class Link
 		include DataMapper::Resource
 		property :id, Serial
-		property :document_id, Integer
+		property :document_pk, Integer
 		belongs_to :project
 		belongs_to :document
 		def link_json
@@ -287,7 +287,7 @@
 		if (n = Namespace.get(params[:namespace])) && 
 			(p = Project.get(params[:project], params[:namespace])) && 
 			(d_id = params[:document] )
-			l = Link.first(project: p, document_id: d_id)
+			l = Link.first(project: p, document_pk: d_id)
 			puts l
 			if l.destroy
 				SUCCESS
