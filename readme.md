@@ -75,6 +75,35 @@ Config constants for later:
 
 ```
 
+### Icons
+
+We serve icons with links for use on client side. They're generated from GMail attachment icons (is that illegal?):
+
+```Ruby
+
+	ICONS = {
+
+		"doc" => "data:image/gif;base64,R0lGODlhEAAQANUgANvh8gZCm0RrvGCAylhwppOr5rnI7XmT1oCe5jJVmT1otmeK1TVesgg4ia672IOc2ipit4uk3Vd90E52y3eKnGd+syg+bfDy+oml6U1qpwlLsgU2goSEhMbGxgAAAP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAACAALAAAAAAQABAAAAaIQJCQQywahUgQ58NsMjkeYaGAQRwWkokA8oSCCk6nhukpexCGxwCwJkQ0nfincwaoAQJAhjKezz0HHwcCDgkRCQYBHX50Cx8VAgQbDBYfioweEh8EiBsbDh8NcYt0Ex+TFxsKTBtOdKthrKN/EBq2AbgNnq5RQ2GjpL1KsbxIHMDIccJQZs3NQQA7",
+
+		"xls" => "data:image/gif;base64,R0lGODlhEAAQAMQfADRMGDhsIDRiFGuuZVWWRUiLOJXDkEaELDt3HI+8ij19I2SnXTNZFV6OVs3bzP79+trl2nOkb6CynpuvmoaohG+abOTr5FygVTJsDQoKCoSEhP7+/sbGxgAAAP///////yH5BAEAAB8ALAAAAAAQABAAAAWL4CdqZGmK6Kd57MOyWicOw3IRRHEoCPzIg41wKMSwMh3kwLAgbByNywTDqXo4mYXFMDhELgWI8XrtXJ6GiyLA2QiqnGvGmbikAxWIgBXndAoJCAECCQUBEgxwcgdEFIMNAC9lCkREkWR+CBibAgwMAKB9cigrcH1WfqSSq2Wkpq9VMiMdSbS0GUhIIQA7",
+
+		"ppt" => "data:image/gif;base64,R0lGODlhEAAQANUgAO+TaZQ4LY8zJpE6M/CXXdd/XsdzV8VoTYcsJ9uDYvCkb//8+X0iGvCabPDJmfC6hlYMD9F3WMtULfbWxvJ/S/z07rA5L51dSP7n27BdQ6pJN7xdRYSEhMbGxgAAAP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAACAALAAAAAAQABAAAAaTQJCQQywahUgQ58NsMonCRKJQiBgOh83m+eGAEh9MZjC4TD7bj2ftKWA0lQVkgJhsOvhPp52JyyUNGRpOexECFBQAgAoBGngdeh4GAw4ODwAACgIBhB4HGQSWDQAEGQKPkQdvBAqkFhgInVsYBgEBBhgfDKh7WoIaAQIIDAydSEt6eo+Qe8dOz5HHy9N4Hsds2NlBADs=",
+
+		"graphic" => "data:image/gif;base64,R0lGODlhEAAQALMPAPHv3hZpyg8wX6+sovzSSdKsOc/FnZp4PPOlqNm1SrUhKMbGxoSEhAAAAP///////yH5BAEAAA8ALAAAAAAQABAAAARa8ElGq5X4Mcc7Z02meR4VYhvJNew5qt3ipg5yGJ6MOkug/IBEwaCbBI4+BWE5nCEFgsSSUDg4j4JBYVqdAQJQhlZ4sO48gHIZdM4ZBvAZLDZb2O/4oqbF70cAADs=",
+
+		"txt" => "data:image/gif;base64,R0lGODlhEAAQAKIAAIWFhYSEhAAAAMbGxv///////wAAAAAAACH5BAEAAAUALAAAAAAQABAAAAM8WBrcrrAEQisNIkoyuicBkEGTVQnouHnswKmlWQ0w13YvKVu0fuO9xW5W+7mCm2FOaFwmh8iA0QNLWa8JADs=",
+
+		"zip" => "data:image/gif;base64,R0lGODlhEAAQALMIAOHhF66srE9PTy0tLcbGxoSEhAAAAP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAAgALAAAAAAQABAAAARVEMlCq5UYlcM7L0ameR4VYhsXDOwAGucYCEJgF8NBxJsACJbcDnXwAY5AIa94ROJ0S5o0CSUeBras0npt5aoTErAzDB9eaPCI5ClrCPC43P2C2e+GCAA7",
+
+		"sound" => "data:image/gif;base64,R0lGODlhEAAQALMPAG2Q10RipPHy8ipXpzBAeWN0qK2xvnqEmUpei5qhtIGjxsbGxoSEhAAAAP///////yH5BAEAAA8ALAAAAAAQABAAAARY8ElGq5X4Mcc7Z02meR4VYpu3FEXjniPHFgDBLXDqIEFQILdcBygQAB041NBRPCYnS4HBhhQ6po4DYCCoKrXcxEDRfY7ECpIXylSvY+43Y0Gv282gl14fAQA7",
+
+		"pdf" => "data:image/gif;base64,R0lGODlhEAAQALMPAPsICf+0tP+KiqcBAtygof/q6vxhYf/Y2IsBA+5UVfYSFcbGxoSEhAAAAP///////yH5BAEAAA8ALAAAAAAQABAAAARm8ElGq5X4Mcc7Z41EJCSpJIrygY+ZvgDCNXSDvikADN7SKIigcEDshSaeRMCI2XAKBkGh42t2BIGDIXuoIjlbgcCgMBiOGk5gO3UUAgT0Zn3wcLwag9J+l5vbdngMC4SFhoI1iYoRADs=",
+
+		"html" => "data:image/gif;base64,R0lGODlhEAAQAMQfAFOrFdz4lUWOs1JTsCNzHK/Xmerp+oSkyE1w8y9ZkdLU60NS9DA44xpZP46O03V50jSKV4HPOK7lYRc0aTuHHzQ9yRgkkbHxUE5b1qGn4k+pZ4SEhMbGxgAAAP///////yH5BAEAAB8ALAAAAAAQABAAAAWO4CduZGmK6Ld5bMtuXap6XG17ZIwqDvJkhlZnGDMcOIFLJIGxcWgdY2B6ATQWGEWL08loChIlIbFgPGrQB4RAiVCu5cG2gxFAGhQKJMFgWNBcDwiDBBESAHxyLFwZGIMNAIcNFg6AUQ4VCwmQFBMDQYs6mBUTDZ5OUCIGDgMWCQ9aLlwoG062NToqRLu8IQA7",
+
+	}
+
+```
 
 ## Models
 
@@ -153,10 +182,13 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 
 ### Document
 
+Link is what actually appears inside a project's folder. It's a reference to the underlying document:
+
 ```Ruby
 	class Link
 		include DataMapper::Resource
 		property :id, Serial
+		property :document_id, Integer
 
 		belongs_to :project
 		belongs_to :document
@@ -173,7 +205,11 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 			document.to_json
 		end
 	end
+```
 
+Document is the reference to the file. It serves up a data uri in the `Document#icon` method.
+
+```Ruby
 	class Document
 		include DataMapper::Resource
 		
@@ -184,8 +220,31 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 		property :md5, String
 		property :url, Text
 		property :size_in_kb, Integer
-		property :type, Text, default: lambda { |r, p| File.extname(r.name).gsub(/\./, '')  }
+		property :type, Text, default: lambda { |r, p| File.extname(r.name).gsub(/\./, '').downcase  }
 		property :name, Text
+
+		def icon
+
+			if %w{doc docx xml odt }.include? type 
+				ICONS["doc"]
+			elsif %w{png jpg jpeg gif bmp tiff svg}.include? type
+				ICONS["graphic"]
+			elsif %w{mp3 wav aac}.include? type
+				ICONS["sound"]
+			elsif %w{xls xlsx csv tsv tab ods}.include? type
+				ICONS["xls"]
+			elsif %w{ppt pptx odp}.include? type
+				ICONS["ppt"]
+			elsif %w{zip gz 7z}.include? type
+				ICONS["zip"]
+			elsif %w{pdf}.include? type
+				ICONS["pdf"]
+			elsif %{html}.include? type
+				ICONS["html"]
+			else 
+				ICONS["txt"]
+			end
+		end
 
 		def to_json
 			json = "{ 
@@ -195,7 +254,8 @@ Project denotes the actual activity in the given namespace. It likely has an ins
 					\"size_in_kb\" : #{size_in_kb},
 					\"filetype\" : \"#{type}\",
 					\"md5\" : \"#{ md5}\",	
-					\"path\" : \"/documents/#{pk}\" 
+					\"path\" : \"/documents/#{pk}\",
+					\"icon\" : \"#{icon}\" 
 				}"
 		end
 	end
@@ -436,16 +496,15 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 
 	delete "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
 		
-		p "Delete request /#{FILESYSTEM_ROOT}/#{params[:namespace]}/#{params[:project]}/#{params[:document]}"
 		protected!
 
+		p "Delete request /#{FILESYSTEM_ROOT}/#{params[:namespace]}/#{params[:project]}/#{params[:document]}"
+		
 		if (n = Namespace.get(params[:namespace])) && 
 			(p = Project.get(params[:project], params[:namespace])) && 
-			(d = Document.get(params[:document]) )
+			(d_id = params[:document] )
 
-			puts [n.to_json, p.to_json, d.to_json]
-
-			l = Link.first(project: p, document: d)
+			l = Link.first(project: p, document_id: d_id)
 
 			puts l
 

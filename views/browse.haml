@@ -33,7 +33,7 @@
 				%input{ onkeyup: "$('#upload').attr('action', 'files/'+ this.value);" }
 			%form#upload.row{ action: '', method: "post", :enctype=>"multipart/form-data"}
 				%input{type: "file", name: "file"}
-				%input{type: "submit"}
+				%input{type: "submit", class: "btn btn-primary"}
 
 			#files 
 				%i.icon-folder-close
@@ -79,15 +79,29 @@
 				log "data", data
 
 				target = $('#'+urllike_id+' .children')
-				menu = ("<li id='"+urllike_id+"--"+d.key+"' class='" + d.type + "'>
-							<i class='"+ (if d.type is 'document' then 'icon-file' else 'icon-folder-close') + "'></i>
-							<a onclick=\"App.navigate_to('"+urllike_id+"--"+d.key+"')\">" + 
+				menu = ("<li id='"+urllike_id+"--"+d.key+"' class='" + d.type + "'>" +
+							
+							(if d.type is 'document'
+								"<img style='margin:4px;' src='"+d.icon+"' />" 
+							else 
+								"<i class='icon-folder-close'></i>") +
+							
+							"<a onclick=\"App.navigate_to('"+urllike_id+"--"+d.key+"')\">" + 
 							d.name + 
-							"</a>
-							<a class='destroy-link' onclick=\"App.destroy('"+urllike_id+"--"+d.key+"')\" >
+							"</a>" +
+
+							(if d.type is "namespace"
+								" ("+d.project_count+")"
+							else if d.type is "project"
+								" ("+d.document_count+")"
+							else 
+								""
+							) +
+
+							"<a class='destroy-link' onclick=\"App.destroy('"+urllike_id+"--"+d.key+"')\" >
 								<i class='icon-trash'></i>
-							</a>
-							<ul class='children unstyled'></ul>
+							</a>" +
+							"<ul class='children unstyled'></ul>
 						</li>" for d in data.contents).join("") 
 
 				# console.log menu
@@ -113,13 +127,16 @@
 
 
 		Finch.route "/", () ->
+			log "Called home"
 			Finch.navigate "/files"
 
-		Finch.route "/files", () ->
+		Finch.route "/files", (bindings, child_callback) ->
 			App.open("files")
+			child_callback()
 
-		Finch.route "[/files]/:namespace", (bindings) ->
+		Finch.route "[/files]/:namespace", (bindings, child_callback) ->
 			App.open("files--"+bindings.namespace)
+			child_callback()
 
 		Finch.route "[/files/:namespace]/:project", (bindings) ->
 			App.open("files--"+bindings.namespace+"--"+bindings.project)
