@@ -50,7 +50,11 @@ Set authentication and connection info in the Environment. They are not written 
 
 	AWS_ACCESS_KEY_ID =  ENV['AWS_ACCESS_KEY_ID']
 	AWS_ACCESS_SECRET_KEY =  ENV['AWS_SECRET_KEY']
+```
 
+DataMapper is configured for Heroku's DATABASE_URL or the local machine.
+
+```Ruby
 
 	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
 
