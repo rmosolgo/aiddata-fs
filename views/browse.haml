@@ -60,26 +60,31 @@
 			# naming convention -- an element's ID is the same as it's path, with -- instead of /
 			
 			# this_element is the <li>
-			this_element = $('#'+urllike_id)
-			log this_element
+			this_element = $('#' + urllike_id)
+			# log this_element			
 			# get its children, if they're there, and close them.
-			this_element.children('.icon-folder-close').removeClass('icon-folder-close').addClass('icon-folder-open')
+			this_element.children('.icon-folder-close')
+				.removeClass('icon-folder-close')
+				.addClass('icon-folder-open')
 
 			# if its a document...
 			if this_element.hasClass("document")
-				log "Getting a document"
+				# log "Getting a document"
 				window.open(url)
 			else
-				$.get(url, (data) -> print_data_from(urllike_id, data) )
+				$.get(url, (data) -> print_data_from(urllike_id, data))
 
 			
 			print_data_from = (urllike_id, data) ->
-				data = $.parseJSON(data)
-				log "data", data
+				# data = $.parseJSON(data)
+				# log "data", data
 
-				target = $('#'+urllike_id+' .children')
-				menu = ("<li id='"+urllike_id+"--"+d.key+"' class='" + d.type + "'>" +
-							
+				target = $('#' + urllike_id + ' .children')
+				target.html("")
+				for d in data.contents
+					do (d) ->
+						list_item = (
+							"<li id='"+urllike_id+"--"+d.key+"' class='" + d.type + "'>" +	
 							(if d.type is 'document'
 								"<img style='margin:4px;' src='"+d.icon+"' />" 
 							else 
@@ -101,10 +106,9 @@
 								<i class='icon-trash'></i>
 							</a>" +
 							"<ul class='children unstyled'></ul>
-						</li>" for d in data.contents).join("") 
+							</li>" )
 
-				# console.log menu
-				target.html menu
+						target.append(list_item)	
 
 		App.destroy = (urllike_id) ->
 			url = urllike_id.replace(/--/g, '/') 

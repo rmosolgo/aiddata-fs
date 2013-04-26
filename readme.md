@@ -32,6 +32,8 @@ and may be retrieved with three parameters: _namespace_, _project id_, and _docu
 
 - Amazon S3 for storage:
 
+
+
 ```Ruby
 
 	require 'aws-sdk' 
@@ -59,6 +61,7 @@ DataMapper is configured for Heroku's DATABASE_URL or the local machine.
 	DataMapper.setup(:default, ENV['DATABASE_URL'] || 'postgres://postgres:postgres@localhost/postgres')
 
 ```
+
 
 ### Constants
 
@@ -136,7 +139,7 @@ projects, or "mbdc" for media-based data collection projects.
 ```
 #### Permissions
 
- Any user me `GET` a resource, but any idempotent request must pass authentication (also known to AidData FS).
+ Any user may `GET` a resource, but any idempotent request must pass authentication (also known to AidData FS).
 
 ```Ruby
 
@@ -192,7 +195,7 @@ Link is what actually appears inside a project's folder. It's a reference to the
 	class Link
 		include DataMapper::Resource
 		property :id, Serial
-		property :document_pk, Integer
+		property :document_pk, Integer, index: true
 
 		belongs_to :project
 		belongs_to :document
@@ -278,9 +281,7 @@ Document is the reference to the file. It serves up a data uri in the `Document#
 		haml :browse
 	end
 
-	get "/#{FILESYSTEM_ROOT}" do
-		locate "root", Namespace.all
-	end
+
 ```
 
 ## API
@@ -288,7 +289,10 @@ Document is the reference to the file. It serves up a data uri in the `Document#
 JSON API is powered by the models' `:to_json` method, which allows really simple navigation.
 
 ```Ruby
-
+	
+	def returns_json
+		content_type :json
+	end
 
 	def locate(location, contents=nil)
 		# location: string OR obj that responds to to_json
@@ -318,6 +322,13 @@ __URL:__ `/:namespace`
 - `GET`ting the namespace path (eg `/mbdc`) responds with a project manifest.
 
 ```Ruby
+	
+	get "/#{FILESYSTEM_ROOT}" do
+
+		returns_json
+		locate "root", Namespace.all
+	end
+
 	post "/#{FILESYSTEM_ROOT}" do
 		
 		protected!
@@ -332,6 +343,8 @@ __URL:__ `/:namespace`
 	end	
 
 	get "/#{FILESYSTEM_ROOT}/:namespace" do
+
+		returns_json 
 
 		if n = Namespace.get(params[:namespace])
 			locate n.name, n.projects
@@ -398,6 +411,8 @@ It has a RESTful URL such as `/malawi/8071234` which responds to requests:
 ```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project" do
 		
+		returns_json
+
 		if (n = Namespace.get(params[:namespace])) && (p = Project.get(params[:project], params[:namespace]))
 			locate p.id, p.documents
 		else
@@ -476,6 +491,9 @@ Individual documents have RESTful URLs, eg `/malawi/8071234/9983`.
 
 ```Ruby
 	get "/#{FILESYSTEM_ROOT}/:namespace/:project/:document" do
+
+		returns_json
+
 		if d = Document.get(params[:document])
 			require 'open-uri'
 			p "Getting file from #{d.url}"
@@ -644,6 +662,8 @@ Documents can also be downloaded directly via `/document/:id`.
 
 	get "/documents" do
 		
+		returns_json
+
 		protected!
 
 		"[
